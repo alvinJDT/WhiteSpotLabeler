@@ -20,17 +20,17 @@ except ImportError:
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
 LABELS = [
-    "No white spot",
-    "Minimal whitespot",
-    "Moderate whitespot",
-    "Extreme whitespot",
+    "Wet",
+    "Minimum dry",
+    "Moderate",
+    "Very dry",
 ]
 
 LABEL_CHOICES = [
-    ("1", LABELS[0], "No visible white areas", "no"),
-    ("2", LABELS[1], "Small or hard-to-see spots", "minimal"),
-    ("3", LABELS[2], "Clear spots, but not covering much", "moderate"),
-    ("4", LABELS[3], "Large or many white spots", "extreme"),
+    ("1", LABELS[0], "Surface still looks moist", "no"),
+    ("2", LABELS[1], "Slightly dry, still partly moist", "minimal"),
+    ("3", LABELS[2], "Clearly dry in several areas", "moderate"),
+    ("4", LABELS[3], "Very dry or fully dried", "extreme"),
 ]
 
 THEME = {
@@ -57,7 +57,7 @@ class ImageItem:
 class WhiteSpotLabeler(tk.Tk):
     def __init__(self, default_zip=None):
         super().__init__()
-        self.title("White Spot Image Labeler")
+        self.title("Dryness Image Labeler")
         self.geometry("1100x780")
         self.minsize(780, 560)
         self.configure(bg=THEME["bg"])
@@ -88,13 +88,13 @@ class WhiteSpotLabeler(tk.Tk):
 
         header = ttk.Frame(root, style="App.TFrame")
         header.grid(row=0, column=0, sticky="ew")
-        header.columnconfigure(0, weight=1)
+        header.columnconfigure(0, weight= 1)
         header.columnconfigure(1, weight=0)
-        ttk.Label(header, text="White Spot Labeler", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(header, text="Dryness Image Labeler", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Button(header, text="Help", command=self._show_help).grid(row=0, column=1, sticky="e")
         ttk.Label(
             header,
-            text="A simple guided tool for labeling white spots and saving the results to CSV and Excel.",
+            text="A simple guided tool for labeling image dryness and saving the results to CSV and Excel.",
             style="MutedOnBg.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
@@ -188,7 +188,7 @@ class WhiteSpotLabeler(tk.Tk):
 
         self.question_label = ttk.Label(
             labeler,
-            text="Look at the image, then choose the button that best matches the white spots.",
+            text="Look at the image, then choose the button that best matches the dryness level.",
             anchor="center",
             style="Question.TLabel",
         )
@@ -239,7 +239,7 @@ class WhiteSpotLabeler(tk.Tk):
         ).grid(row=0, column=1, sticky="ew")
         ttk.Button(keys, text="Skip Image", command=self._next_image).grid(row=0, column=2)
 
-        for key, label in zip(("1", "2", "3", "4"), LABELS):
+        for key, label, _helper, _color_key in LABEL_CHOICES:
             self.bind(key, lambda _event, value=label: self._label_current(value))
         self.bind("<Left>", lambda _event: self._previous_image())
         self.bind("<Right>", lambda _event: self._next_image())
@@ -276,11 +276,11 @@ class WhiteSpotLabeler(tk.Tk):
 
     def _show_help(self):
         messagebox.showinfo(
-            "How to use White Spot Labeler",
+            "How to use Dryness Image Labeler",
             "1. Click Choose Image ZIP File.\n"
             "2. Select the dataset you want to label.\n"
             "3. Click Start Labeling Selected Dataset.\n"
-            "4. For each image, choose the button that best describes the white spots.\n\n"
+            "4. For each image, choose the button that best describes the dryness level.\n\n"
             "The app saves after every label. Your CSV and Excel files are saved beside the ZIP file.",
         )
 
@@ -496,8 +496,8 @@ class WhiteSpotLabeler(tk.Tk):
 
     def _output_base(self):
         if not self.zip_path:
-            return Path.cwd() / "whitespot_labels"
-        return self.zip_path.with_name(f"{self.zip_path.stem}_whitespot_labels")
+            return Path.cwd() / "dryness_labels"
+        return self.zip_path.with_name(f"{self.zip_path.stem}_dryness_labels")
 
     def _save_annotations(self, silent=False):
         if not self.zip_path:
@@ -587,7 +587,7 @@ class WhiteSpotLabeler(tk.Tk):
                 "xl/workbook.xml",
                 """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="White Spot Labels" sheetId="1" r:id="rId1"/></sheets>
+<sheets><sheet name="Dryness Labels" sheetId="1" r:id="rId1"/></sheets>
 </workbook>""",
             )
             workbook.writestr(
