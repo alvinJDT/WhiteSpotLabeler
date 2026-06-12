@@ -69,6 +69,10 @@ class WhiteSpotLabeler(tk.Tk):
         self.index = 0
         self.annotations = {}
         self.current_photo = None
+        self.zoom_factor = 1.0
+        self.zoom_step = 1.25
+        self.min_zoom = 0.5
+        self.max_zoom = 8.0
         self.progress_var = tk.DoubleVar(value=0)
         self.temp_dir = tempfile.TemporaryDirectory(prefix="whitespot_labeler_")
 
@@ -166,7 +170,7 @@ class WhiteSpotLabeler(tk.Tk):
         labeler = ttk.Frame(root, padding=16, style="Panel.TFrame")
         labeler.grid(row=1, column=0, sticky="nsew", pady=(16, 0))
         labeler.columnconfigure(0, weight=1)
-        labeler.rowconfigure(3, weight=1)
+        labeler.rowconfigure(4, weight=1)
         labeler.grid_remove()
         self.labeler_frame = labeler
 
@@ -194,8 +198,32 @@ class WhiteSpotLabeler(tk.Tk):
         )
         self.question_label.grid(row=2, column=0, sticky="ew", pady=(0, 10))
 
+        zoom_row = ttk.Frame(labeler, style="Panel.TFrame")
+        zoom_row.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+
+        ttk.Button(
+            zoom_row,
+            text="Zoom Out",
+            command=lambda: self._change_zoom(1 / self.zoom_step),
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            zoom_row,
+            text="Reset Zoom",
+            command=self._reset_zoom,
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            zoom_row,
+            text="Zoom In",
+            command=lambda: self._change_zoom(self.zoom_step),
+        ).pack(side="left", padx=5)
+
+        self.zoom_label = ttk.Label(zoom_row, text="Zoom: 100%")
+        self.zoom_label.pack(side="left", padx=10)
+
         image_shell = tk.Frame(labeler, bg=THEME["stage"], highlightthickness=1, highlightbackground=THEME["line"])
-        image_shell.grid(row=3, column=0, sticky="nsew")
+        image_shell.grid(row=4, column=0, sticky="nsew")
         image_shell.columnconfigure(0, weight=1)
         image_shell.rowconfigure(0, weight=1)
         self.image_label = tk.Label(image_shell, anchor="center", bg=THEME["stage"], fg="#ffffff")
@@ -203,10 +231,10 @@ class WhiteSpotLabeler(tk.Tk):
         self.image_label.bind("<Configure>", lambda _event: self._show_current_image())
 
         self.path_label = ttk.Label(labeler, text="", anchor="center", style="Path.TLabel")
-        self.path_label.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        self.path_label.grid(row=5, column=0, sticky="ew", pady=(10, 0))
 
         buttons = ttk.Frame(labeler, style="Panel.TFrame")
-        buttons.grid(row=5, column=0, sticky="ew", pady=(14, 0))
+        buttons.grid(row=6, column=0, sticky="ew", pady=(14, 0))
         for col, (key, label, helper, color_key) in enumerate(LABEL_CHOICES):
             buttons.columnconfigure(col, weight=1)
             button = tk.Button(
@@ -228,7 +256,7 @@ class WhiteSpotLabeler(tk.Tk):
             button.grid(row=0, column=col, sticky="ew", padx=4)
 
         keys = ttk.Frame(labeler, style="Panel.TFrame")
-        keys.grid(row=6, column=0, sticky="ew", pady=(10, 0))
+        keys.grid(row=7, column=0, sticky="ew", pady=(10, 0))
         keys.columnconfigure(1, weight=1)
         ttk.Button(keys, text="Previous Image", command=self._previous_image).grid(row=0, column=0)
         ttk.Label(
@@ -243,6 +271,11 @@ class WhiteSpotLabeler(tk.Tk):
             self.bind(key, lambda _event, value=label: self._label_current(value))
         self.bind("<Left>", lambda _event: self._previous_image())
         self.bind("<Right>", lambda _event: self._next_image())
+        self.bind_all("<Control-MouseWheel>", self._on_zoom_wheel)
+        self.bind("<Control-minus>", lambda _event: self._change_zoom(1 / self.zoom_step))
+        self.bind("<Control-equal>", lambda _event: self._change_zoom(self.zoom_step))
+        self.bind("<Control-plus>", lambda _event: self._change_zoom(self.zoom_step))
+        self.bind("<Control-0>", lambda _event: self._reset_zoom())
 
     def _configure_styles(self):
         style = ttk.Style(self)
@@ -422,6 +455,27 @@ class WhiteSpotLabeler(tk.Tk):
         self.labeler_frame.grid_remove()
         self.picker_frame.grid()
 
+    def _update_zoom_label(self):
+        if hasattr(self, "zoom_label"):
+            self.zoom_label.config(text=f"Zoom: {int(self.zoom_factor * 100)}%")
+
+    def _change_zoom(self, factor):
+        self.zoom_factor *= factor
+        self.zoom_factor = max(self.min_zoom, min(self.max_zoom, self.zoom_factor))
+        self._update_zoom_label()
+        self._show_current_image()
+
+    def _reset_zoom(self):
+        self.zoom_factor = 1.0
+        self._update_zoom_label()
+        self._show_current_image()
+
+    def _on_zoom_wheel(self, event):
+        if event.delta > 0:
+            self._change_zoom(self.zoom_step)
+        else:
+            self._change_zoom(1 / self.zoom_step)
+
     def _show_current_image(self):
         if not self.items or not self.zip_file:
             return
@@ -434,7 +488,13 @@ class WhiteSpotLabeler(tk.Tk):
             self.image_label.config(text=f"Could not load image:\n{exc}", image="")
             return
 
-        self.image_label.config(image=self.current_photo, text="")
+        if self.current_photo is None:
+            self.image_label.config(
+                image="",
+                text="Image preview requires Pillow for zoom support.",
+            )
+        else:
+            self.image_label.config(image=self.current_photo, text="")
         label = self.annotations.get(item.archive_path, {}).get("label", "unlabeled")
         label_text = f"Already labeled: {label}" if label != "unlabeled" else "Not labeled yet"
         self.status_label.config(text=f"Step 3: Image {self.index + 1} of {len(self.items)}")
@@ -450,16 +510,20 @@ class WhiteSpotLabeler(tk.Tk):
 
         if Image and ImageTk:
             image = Image.open(io.BytesIO(data))
-            image.thumbnail((width, height), Image.Resampling.LANCZOS)
+
+            original_w, original_h = image.size
+
+            base_scale = min(width / original_w, height / original_h)
+            scale = base_scale * self.zoom_factor
+
+            new_w = max(1, int(original_w * scale))
+            new_h = max(1, int(original_h * scale))
+
+            image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
             return ImageTk.PhotoImage(image)
 
-        suffix = ".png"
-        temp_path = Path(self.temp_dir.name) / f"current{suffix}"
-        temp_path.write_bytes(data)
-        photo = tk.PhotoImage(file=str(temp_path))
-        while photo.width() > width or photo.height() > height:
-            photo = photo.subsample(2, 2)
-        return photo
+        return None
 
     def _label_current(self, label):
         if not self.items:
